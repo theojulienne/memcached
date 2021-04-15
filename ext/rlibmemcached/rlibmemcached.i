@@ -149,16 +149,6 @@
 %include "libmemcached/memcached_touch.h"
 %include "libmemcached/memcached_exist.h"
 
-//// Custom C functions
-
-VALUE rb_str_new_by_ref(char *ptr, long len);
-%{
-VALUE rb_str_new_by_ref(char *ptr, long len)
-{
-    return rb_external_str_new_with_enc(ptr, len, rb_ascii8bit_encoding());
-}
-%}
-
 //// Manual wrappers
 
 // Single get
@@ -167,7 +157,7 @@ VALUE memcached_get_rvalue(memcached_st *ptr, const char *key, size_t key_length
 VALUE memcached_get_rvalue(memcached_st *ptr, const char *key, size_t key_length, uint32_t *flags, memcached_return *error) {
   size_t value_length = 0;
   char *value = memcached_get(ptr, key, key_length, &value_length, flags, error);
-  return rb_str_new_by_ref(value, value_length);
+  return rb_str_new(value, value_length);
 };
 %}
 
@@ -176,7 +166,7 @@ VALUE memcached_get_len_rvalue(memcached_st *ptr, const char *key, size_t key_le
 VALUE memcached_get_len_rvalue(memcached_st *ptr, const char *key, size_t key_length, uint32_t user_spec_len, uint32_t *flags, memcached_return *error) {
   size_t value_length = 0;
   char *value = memcached_get_len(ptr, key, key_length, user_spec_len, &value_length, flags, error);
-  return rb_str_new_by_ref(value, value_length);
+  return rb_str_new(value, value_length);
 };
 %}
 
@@ -185,7 +175,7 @@ VALUE memcached_get_from_last_rvalue(memcached_st *ptr, const char *key, size_t 
 VALUE memcached_get_from_last_rvalue(memcached_st *ptr, const char *key, size_t key_length, uint32_t *flags, memcached_return *error) {
   size_t value_length = 0;
   char *value = memcached_get_from_last(ptr, key, key_length, &value_length, flags, error);
-  return rb_str_new_by_ref(value, value_length);
+  return rb_str_new(value, value_length);
 };
 %}
 
@@ -198,7 +188,7 @@ VALUE memcached_fetch_rvalue(memcached_st *ptr, char *key, size_t *key_length, u
   *key_length = 0;
   if (error) *error = MEMCACHED_TIMEOUT; // timeouts leave error uninitialized
   char *value = memcached_fetch(ptr, key, key_length, &value_length, flags, error);
-  VALUE str = rb_str_new_by_ref(value, value_length);
+  VALUE str = rb_str_new(value, value_length);
   rb_ary_push(ary, str);
   return ary;
 };

@@ -2318,30 +2318,24 @@ SWIG_From_unsigned_SS_int  (unsigned int value)
 }
 
 
-VALUE rb_str_new_by_ref(char *ptr, long len)
-{
-    return rb_external_str_new_with_enc(ptr, len, rb_ascii8bit_encoding());
-}
-
-
 VALUE memcached_get_rvalue(memcached_st *ptr, const char *key, size_t key_length, uint32_t *flags, memcached_return *error) {
   size_t value_length = 0;
   char *value = memcached_get(ptr, key, key_length, &value_length, flags, error);
-  return rb_str_new_by_ref(value, value_length);
+  return rb_str_new(value, value_length);
 };
 
 
 VALUE memcached_get_len_rvalue(memcached_st *ptr, const char *key, size_t key_length, uint32_t user_spec_len, uint32_t *flags, memcached_return *error) {
   size_t value_length = 0;
   char *value = memcached_get_len(ptr, key, key_length, user_spec_len, &value_length, flags, error);
-  return rb_str_new_by_ref(value, value_length);
+  return rb_str_new(value, value_length);
 };
 
 
 VALUE memcached_get_from_last_rvalue(memcached_st *ptr, const char *key, size_t key_length, uint32_t *flags, memcached_return *error) {
   size_t value_length = 0;
   char *value = memcached_get_from_last(ptr, key, key_length, &value_length, flags, error);
-  return rb_str_new_by_ref(value, value_length);
+  return rb_str_new(value, value_length);
 };
 
 
@@ -2351,7 +2345,7 @@ VALUE memcached_fetch_rvalue(memcached_st *ptr, char *key, size_t *key_length, u
   *key_length = 0;
   if (error) *error = MEMCACHED_TIMEOUT; // timeouts leave error uninitialized
   char *value = memcached_fetch(ptr, key, key_length, &value_length, flags, error);
-  VALUE str = rb_str_new_by_ref(value, value_length);
+  VALUE str = rb_str_new(value, value_length);
   rb_ary_push(ary, str);
   return ary;
 };
@@ -12779,41 +12773,6 @@ fail:
 
 
 SWIGINTERN VALUE
-_wrap_rb_str_new_by_ref(int argc, VALUE *argv, VALUE self) {
-  char *arg1 = (char *) 0 ;
-  long arg2 ;
-  int res1 ;
-  char *buf1 = 0 ;
-  int alloc1 = 0 ;
-  long val2 ;
-  int ecode2 = 0 ;
-  VALUE result;
-  VALUE vresult = Qnil;
-  
-  if ((argc < 2) || (argc > 2)) {
-    rb_raise(rb_eArgError, "wrong # of arguments(%d for 2)",argc); SWIG_fail;
-  }
-  res1 = SWIG_AsCharPtrAndSize(argv[0], &buf1, NULL, &alloc1);
-  if (!SWIG_IsOK(res1)) {
-    SWIG_exception_fail(SWIG_ArgError(res1), Ruby_Format_TypeError( "", "char *","rb_str_new_by_ref", 1, argv[0] ));
-  }
-  arg1 = (char *)(buf1);
-  ecode2 = SWIG_AsVal_long(argv[1], &val2);
-  if (!SWIG_IsOK(ecode2)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode2), Ruby_Format_TypeError( "", "long","rb_str_new_by_ref", 2, argv[1] ));
-  } 
-  arg2 = (long)(val2);
-  result = (VALUE)rb_str_new_by_ref(arg1,arg2);
-  vresult = result;
-  if (alloc1 == SWIG_NEWOBJ) free((char*)buf1);
-  return vresult;
-fail:
-  if (alloc1 == SWIG_NEWOBJ) free((char*)buf1);
-  return Qnil;
-}
-
-
-SWIGINTERN VALUE
 _wrap_memcached_get_rvalue(int argc, VALUE *argv, VALUE self) {
   memcached_st *arg1 = (memcached_st *) 0 ;
   char *arg2 = (char *) 0 ;
@@ -13994,7 +13953,6 @@ SWIGEXPORT void Init_rlibmemcached(void) {
   rb_define_module_function(mRlibmemcached, "memcached_touch_by_key", _wrap_memcached_touch_by_key, -1);
   rb_define_module_function(mRlibmemcached, "memcached_exist", _wrap_memcached_exist, -1);
   rb_define_module_function(mRlibmemcached, "memcached_exist_by_key", _wrap_memcached_exist_by_key, -1);
-  rb_define_module_function(mRlibmemcached, "rb_str_new_by_ref", _wrap_rb_str_new_by_ref, -1);
   rb_define_module_function(mRlibmemcached, "memcached_get_rvalue", _wrap_memcached_get_rvalue, -1);
   rb_define_module_function(mRlibmemcached, "memcached_get_len_rvalue", _wrap_memcached_get_len_rvalue, -1);
   rb_define_module_function(mRlibmemcached, "memcached_get_from_last_rvalue", _wrap_memcached_get_from_last_rvalue, -1);
