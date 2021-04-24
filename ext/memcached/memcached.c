@@ -124,6 +124,7 @@ rb_connection_new(VALUE klass, VALUE rb_config)
 		rb_connection_check_cfg(rb_cConnection, rb_config);
 		rb_raise(rb_eNoMemError, "failed to allocate memcached");
 	}
+	memcached_set_user_data(mc, NULL);
 	return Data_Wrap_Struct(klass, NULL, memcached_free, mc);
 }
 
@@ -241,8 +242,15 @@ rb_connection__mget_callback(const memcached_st *mc, memcached_result_st *result
 	return MEMCACHED_SUCCESS;
 }
 
+/* Begins a get_multi call, but doesn't wait for the results.
+ * This interface could do even less, and even wait for write buffer space
+ * during the write phase, but for simplicity it just gets to the point of
+ * waiting for the main set of results that will usually take 1 network RTT.
+ * 
+ * 
+ */
 static VALUE
-rb_connection_get_multi(VALUE self, VALUE rb_keys)
+rb_connection_begin_get_multi(VALUE self, VALUE rb_keys)
 {
 	memcached_execute_fn callbacks[1] = { &rb_connection__mget_callback };
 	memcached_st *mc;
@@ -272,6 +280,9 @@ rb_connection_get_multi(VALUE self, VALUE rb_keys)
 
 	rb_result = rb_hash_new();
 
+	/* store the pending result as user_data so we can continue adding to it */
+	memcached_set_user_data(mc, (void *)rb_result);
+
 	if (memcached_behavior_get(mc, MEMCACHED_BEHAVIOR_BINARY_PROTOCOL)) {
 		rc = memcached_mget_execute(mc, c_keys, c_lengths, (size_t)keys_len,
 				callbacks, (void *)rb_result, 1);
@@ -280,6 +291,95 @@ rb_connection_get_multi(VALUE self, VALUE rb_keys)
 		rc = memcached_mget(mc, c_keys, c_lengths, (size_t)keys_len);
 		rb_memcached_error_check(rc);
 	}
+
+	return Qnil;
+}
+
+/* Continues a get_multi that was started with rb_connection_begin_get_multi.
+ * Returns a tuple: (data, [readers...], [writers...]) where data is the hash
+ * of keys received so far, and the 2 lists contain pending int file descriptors
+ * that can be select()ed on. When any of these fds are available for 
+ * reading/writing, this function should be called again.
+ * 
+ * When all data has been read, it will return an empty set of readers/writers,
+ * indicating that the data is complete and to stop calling this function.
+ */
+static VALUE
+rb_connection_continue_get_multi(VALUE self, VALUE fds)
+{
+	memcached_execute_fn callbacks[1] = { &rb_connection__mget_callback };
+	memcached_st *mc;
+	memcached_return_t rc;
+
+	UnwrapMemcached(self, mc);
+
+	VALUE rb_result = (VALUE)memcached_get_user_data(mc);
+	if ((void *)rb_result == NULL) {
+		/* no operation is pending, so refuse to continue */
+		return Qnil;
+	}
+
+	/* temporarily set the poll timeout to 0, which makes the
+	 * memcached_io_get_readable_server call non-blocking, returning NULL
+	 * if no servers were ready with data available for reading.
+	 */
+	uint64_t old_timeout = memcached_behavior_get(mc, MEMCACHED_BEHAVIOR_POLL_TIMEOUT);
+	memcached_behavior_set(mc, MEMCACHED_BEHAVIOR_POLL_TIMEOUT, 0);
+	
+	rc = memcached_fetch_execute_until_would_block(mc, callbacks, (void *)rb_result, 1);
+
+	/* always reset this */
+	memcached_behavior_set(mc, MEMCACHED_BEHAVIOR_POLL_TIMEOUT, old_timeout);
+
+	VALUE result = rb_ary_new();
+	rb_ary_push(result, rb_result);
+
+	VALUE readers = rb_ary_new();
+	VALUE writers = rb_ary_new();
+	rb_ary_push(result, readers);
+	rb_ary_push(result, writers);
+
+	if (rc == MEMCACHED_NOTFOUND) {
+		/* indicates that we would have blocked */
+
+		/* for now, we only support readers since we block during writing above */
+		int fds[100];
+		uint32_t waiting;
+		waiting = memcached_fetch_execute_get_remaining_fds(mc, fds, sizeof(fds) / sizeof(int));
+		for (uint32_t i = 0; i < waiting; i++) {
+			rb_ary_push(readers, UINT2NUM(fds[i]));
+		}
+	} else if (rc == MEMCACHED_SUCCESS) {
+		/* completed everything we needed to, we're done! */
+
+		/* we are no longer in a pending read, so stop storing it */
+		memcached_set_user_data(mc, NULL);
+	} else {
+		rb_memcached_error_check(rc);
+	}
+
+	return result;
+}
+
+static VALUE
+rb_connection_get_multi(VALUE self, VALUE rb_keys)
+{
+	memcached_execute_fn callbacks[1] = { &rb_connection__mget_callback };
+	memcached_st *mc;
+	memcached_return_t rc;
+
+	UnwrapMemcached(self, mc);
+
+	/* reuse the begin_get_multi pieces to initate the mget */
+	rb_connection_begin_get_multi(self, rb_keys);
+
+	/* pull out the results-so-far from user_data and continue the standard
+	 * way to get all remaining results and add them to the same result set
+	 */
+	VALUE rb_result = (VALUE)memcached_get_user_data(mc);
+
+	/* we are no longer in a pending read, so stop storing it */
+	memcached_set_user_data(mc, NULL);
 
 	rc = memcached_fetch_execute(mc, callbacks, (void *)rb_result, 1);
 	rb_memcached_error_check(rc);
@@ -532,6 +632,8 @@ void Init_memcached(void)
 	rb_define_method(rb_cConnection, "set", rb_connection_set, 4);
 	rb_define_method(rb_cConnection, "get", rb_connection_get, 1);
 	rb_define_method(rb_cConnection, "get_multi", rb_connection_get_multi, 1);
+	rb_define_method(rb_cConnection, "begin_get_multi", rb_connection_begin_get_multi, 1);
+	rb_define_method(rb_cConnection, "continue_get_multi", rb_connection_continue_get_multi, 1);
 	rb_define_method(rb_cConnection, "delete", rb_connection_delete, 1);
 	rb_define_method(rb_cConnection, "add", rb_connection_add, 4);
 	rb_define_method(rb_cConnection, "increment", rb_connection_inc, 2);

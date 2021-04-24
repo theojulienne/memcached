@@ -318,3 +318,75 @@ memcached_return_t memcached_fetch_execute(memcached_st *shell,
 
   return rc;
 }
+
+// the same as memcached_fetch_execute above, except exits rather than repeats when it would block
+memcached_return_t memcached_fetch_execute_until_would_block(memcached_st *shell, 
+                                                             memcached_execute_fn *callback,
+                                                             void *context,
+                                                             uint32_t number_of_callbacks)
+{
+  Memcached* ptr= memcached2Memcached(shell);
+  memcached_result_st *result= &ptr->result;
+  memcached_return_t rc;
+  bool some_errors= false;
+
+  while ((result= memcached_fetch_result(ptr, result, &rc)))
+  {
+    if (memcached_failed(rc) and rc == MEMCACHED_NOTFOUND)
+    {
+      return rc; // return rather than try again when we would block
+    }
+    else if (memcached_failed(rc))
+    {
+      memcached_set_error(*ptr, rc, MEMCACHED_AT);
+      some_errors= true;
+      continue;
+    }
+
+    for (uint32_t x= 0; x < number_of_callbacks; x++)
+    {
+      memcached_return_t ret= (*callback[x])(ptr, result, context);
+      if (memcached_failed(ret))
+      {
+        some_errors= true;
+        memcached_set_error(*ptr, ret, MEMCACHED_AT);
+        break;
+      }
+    }
+  }
+
+  if (some_errors)
+  {
+    return MEMCACHED_SOME_ERRORS;
+  }
+
+  // If we were able to run all keys without issue we return
+  // MEMCACHED_SUCCESS
+  if (memcached_success(rc))
+  {
+    return MEMCACHED_SUCCESS;
+  }
+
+  return rc;
+}
+
+uint32_t memcached_fetch_execute_get_remaining_fds(memcached_st *shell,
+                                                   int *fds,
+                                                   uint32_t max_fds)
+{
+  Memcached* ptr= memcached2Memcached(shell);
+  uint32_t host_index= 0;
+
+  for (uint32_t x= 0; x < memcached_server_count(ptr) and host_index < max_fds; ++x)
+  {
+    memcached_instance_st* instance= memcached_instance_fetch(ptr, x);
+
+    if (instance->response_count() > 0)
+    {
+      fds[host_index] = instance->fd;
+      ++host_index;
+    }
+  }
+
+  return host_index;
+}

@@ -73,6 +73,30 @@ module Memcached
       hash
     end
 
+    def begin_get_multi(keys)
+      keys = keys.compact
+      connection.begin_get_multi(keys)
+    end
+
+    def continue_get_multi(raw: nil)
+      hash, readers, writers = connection.continue_get_multi([])
+
+      # map the values to match get_multi
+      ret_hash = {}
+      hash.each do |key, (value, flags)|
+        if raw != true
+          ret_hash[key] = @codec.decode(key, value, flags)
+        else
+          ret_hash[key] = value
+        end
+      end
+
+      readers.map! { |fd| IO.for_fd(fd).tap { |io| io.autoclose = false } }
+      writers.map! { |fd| IO.for_fd(fd).tap { |io| io.autoclose = false } }
+      
+      [ret_hash, readers, writers]
+    end
+
     def delete(key)
       connection.delete(key)
     end

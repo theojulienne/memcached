@@ -48,6 +48,17 @@ memcached_return_t memcached_fetch_execute(memcached_st *ptr,
                                            void *context,
                                            uint32_t number_of_callbacks);
 
+LIBMEMCACHED_API
+memcached_return_t memcached_fetch_execute_until_would_block(memcached_st *ptr,
+                                                             memcached_execute_fn *callback,
+                                                             void *context,
+                                                             uint32_t number_of_callbacks);
+
+LIBMEMCACHED_API
+uint32_t memcached_fetch_execute_get_remaining_fds(memcached_st *ptr,
+                                                   int *fds,
+                                                   uint32_t max_fds);
+
 #ifdef __cplusplus
 }
 #endif
