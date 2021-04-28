@@ -762,7 +762,7 @@ void memcached_instance_st::close_socket()
   major_version= minor_version= micro_version= UINT8_MAX;
 }
 
-memcached_instance_st* memcached_io_get_readable_server(Memcached *memc, memcached_return_t&)
+memcached_instance_st* memcached_io_get_readable_server(Memcached *memc, int poll_timeout, memcached_return_t&)
 {
 #define MAX_SERVERS_TO_POLL 100
   struct pollfd fds[MAX_SERVERS_TO_POLL];
@@ -802,7 +802,7 @@ memcached_instance_st* memcached_io_get_readable_server(Memcached *memc, memcach
     return NULL;
   }
 
-  int error= poll(fds, host_index, memc->poll_timeout);
+  int error= poll(fds, host_index, poll_timeout);
   switch (error)
   {
   case -1:

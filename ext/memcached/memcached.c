@@ -319,17 +319,10 @@ rb_connection_continue_get_multi(VALUE self, VALUE fds)
 		return Qnil;
 	}
 
-	/* temporarily set the poll timeout to 0, which makes the
-	 * memcached_io_get_readable_server call non-blocking, returning NULL
-	 * if no servers were ready with data available for reading.
+	/* this function does an execute, but without blocking on waiting for
+	 * initial data from any server. once a response starts it may block.
 	 */
-	uint64_t old_timeout = memcached_behavior_get(mc, MEMCACHED_BEHAVIOR_POLL_TIMEOUT);
-	memcached_behavior_set(mc, MEMCACHED_BEHAVIOR_POLL_TIMEOUT, 0);
-	
 	rc = memcached_fetch_execute_until_would_block(mc, callbacks, (void *)rb_result, 1);
-
-	/* always reset this */
-	memcached_behavior_set(mc, MEMCACHED_BEHAVIOR_POLL_TIMEOUT, old_timeout);
 
 	VALUE result = rb_ary_new();
 	rb_ary_push(result, rb_result);

@@ -151,9 +151,10 @@ char *memcached_fetch(memcached_st *shell, char *key, size_t *key_length,
   return memcached_string_take_value(&result_buffer->value);
 }
 
-memcached_result_st *memcached_fetch_result(memcached_st *ptr,
-                                            memcached_result_st *result,
-                                            memcached_return_t *error)
+memcached_result_st *memcached_fetch_result_timeout(memcached_st *ptr,
+                                                    memcached_result_st *result,
+                                                    int poll_timeout,
+                                                    memcached_return_t *error)
 {
   memcached_return_t unused;
   if (error == NULL)
@@ -195,7 +196,7 @@ memcached_result_st *memcached_fetch_result(memcached_st *ptr,
   memcached_instance_st *server;
   memcached_return_t read_ret= MEMCACHED_SUCCESS;
   bool connection_failures= false;
-  while ((server= memcached_io_get_readable_server(ptr, read_ret)))
+  while ((server= memcached_io_get_readable_server(ptr, poll_timeout, read_ret)))
   {
     char buffer[MEMCACHED_DEFAULT_COMMAND_SIZE];
     *error= memcached_response(server, buffer, sizeof(buffer), result);
@@ -269,6 +270,13 @@ memcached_result_st *memcached_fetch_result(memcached_st *ptr,
   return NULL;
 }
 
+memcached_result_st *memcached_fetch_result(memcached_st *ptr,
+                                            memcached_result_st *result,
+                                            memcached_return_t *error)
+{
+  return memcached_fetch_result_timeout(ptr, result, ptr->poll_timeout, error);
+}
+
 memcached_return_t memcached_fetch_execute(memcached_st *shell, 
                                            memcached_execute_fn *callback,
                                            void *context,
@@ -330,7 +338,7 @@ memcached_return_t memcached_fetch_execute_until_would_block(memcached_st *shell
   memcached_return_t rc;
   bool some_errors= false;
 
-  while ((result= memcached_fetch_result(ptr, result, &rc)))
+  while ((result= memcached_fetch_result_timeout(ptr, result, 0, &rc)))
   {
     if (memcached_failed(rc) and rc == MEMCACHED_NOTFOUND)
     {

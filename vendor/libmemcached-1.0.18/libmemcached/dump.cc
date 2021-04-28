@@ -84,7 +84,7 @@ static memcached_return_t ascii_dump(Memcached *memc, memcached_dump_fn *callbac
     // Collect the returned items
     memcached_instance_st* instance;
     memcached_return_t read_ret= MEMCACHED_SUCCESS;
-    while ((instance= memcached_io_get_readable_server(memc, read_ret)))
+    while ((instance= memcached_io_get_readable_server(memc, memc->poll_timeout, read_ret)))
     {
       memcached_return_t response_rc= memcached_response(instance, buffer, MEMCACHED_DEFAULT_COMMAND_SIZE, NULL);
       if (response_rc == MEMCACHED_ITEM)
