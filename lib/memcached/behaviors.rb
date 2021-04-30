@@ -5,7 +5,7 @@ module Memcached
       value = convert_value(behavior, value)
       _set_behavior(behavior, value)
     rescue Memcached::Deprecated
-      warn "Behavior #{behavior_string} is deprecated, and won't work anymore."
+      warn "Behavior #{behavior.to_s} is deprecated, and won't work anymore."
     end
 
     def get_behavior(behavior)
